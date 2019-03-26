@@ -1,0 +1,164 @@
+{% extends "global/Page.html" %}
+{% load staticfiles otree_tags %}
+
+{% block title %}
+    Auction
+{% endblock %}
+
+{% block content %}
+
+    <div class="instructions well well-lg">
+        <p>
+            Instructions go here. Each player can submit a number, 
+            and otree checks who has submitted the bigger number.
+        </p>
+    </div>
+
+    <div id="otree-timeout">
+        <h3>Time left: <span id="otree-timer__time-left" class="badge large"></span></h3>
+    </div>
+
+    <div id="text_from_otree_goes_here"></div>
+
+    <div id="text_from_javascript_goes_here">Initial text</div>
+
+    <!-- In this field you put in the number, that will be sent to otree -->
+    <input type="number" min="0" max="100" id="new_answer"><br>
+
+    <!-- Here JavaScript puts the numbers that it gets sent from otree / retrieves through django magic -->
+    <span id="player1">Number player 1:</span><span id="answer1"></span><br>
+    <span id="player2">Number player 2:</span><span id="answer2"></span><br>
+    <span id="player1">Biggest number in group is:</span><span id="answerbig"></span><br>
+
+    <input id='my_send_button'
+        class="btn  btn-large btn-primary next-button" onclick='sendmessage()'
+        type="button" value="Send and refresh fields X">
+
+
+{% endblock %}
+
+
+{% block scripts %}
+    <script type="text/javascript" src="/static/otree/js/jquery.countdown.min.js"></script>
+    <script>
+        // Timer stuff
+        var milliseconds = {{time_left}}*1000;
+        update_create_countdown(milliseconds);
+
+        // Text variables
+        var you_high = 'You have the higher number!';
+        var you_low  = 'You have the lower number!';
+
+        // Timer function
+        function update_create_countdown(milliseconds) {
+            $('div#otree-timeout').show();
+            var currentDate = new Date();
+
+            $('span#otree-timer__time-left').countdown(currentDate.valueOf() + milliseconds)
+                .on('update.countdown', function (event) {
+                    // %-N is "Total count of minutes till the end, non-padded"
+                    // %S is seconds left
+                    var format = '%-N:%S';
+                    $(this).html(event.strftime(format));
+                })
+                .on('finish.countdown', function (event) {
+                    $('<input>').attr({
+                        type: 'hidden',
+                        name: 'timeout_happened',
+                        value: '1'
+                    }).appendTo('form');
+                    $('#form').submit();
+                });
+        };
+
+        // Required for timer?
+        function curtime() {
+            return (new Date().getTime());
+        }
+
+        // This is the function that is used to refresh all the fields
+        function refresh_fields() {
+            document.getElementById("answer1").innerHTML= {{player.my_player_int_variable}};
+
+            console.log('Finished refresh_fields()'); // This is useful for debugging (Ctrl+Shift+J in Chrome)
+        };
+
+        // Actual logic?
+        window.onload = function () {
+            // When the screen is shown the first time, some fields can be updated already
+            // Here a number is suggested
+            document.getElementById("new_answer").value= 7;
+
+            // This is timer stuff again
+            $('#curdate').html(curtime());
+
+            // Websocket stuff
+            var ws_scheme = window.location.protocol == "https:" ? "wss" : "ws";
+            var socket = new WebSocket(ws_scheme + '://' + window.location.host + "/realtimebasiccode/group{{group.id}}");
+
+            // Handle any errors that occur.
+            socket.onerror = function (error) {
+                console.log('WebSocket Error: ' + error);
+            };
+
+            sendmessage = function (what) {
+                // Compose message. You can put anything in here.
+                var msg = {
+                    id: {{player.id}}, 
+                    id_in_group: {{player.id_in_group}},
+                    new_answer: document.getElementById("new_answer").value
+                };
+                // Send message
+                if (socket.readyState === socket.OPEN) {
+                    socket.send(JSON.stringify(msg));
+                };
+                // Reset the input field
+                document.getElementById("new_answer").value = "";
+            }
+
+            // Show a connected message when the WebSocket is opened.
+            socket.onopen = function (event) {
+                console.log('connected to oTree');
+            };
+
+            // Show a disconnected message when the WebSocket is closed.
+            socket.onclose = function (event) {
+                console.log('disconnected from oTree');
+            };
+
+            // Handle messages sent by the server.
+            socket.onmessage = function (event) {
+                console.log('message received');
+                // I think this "receives" the message
+                var obj = jQuery.parseJSON(event.data);
+                
+                // (Re)fill fields
+                // Option 1: Django magic from group/player fields
+                var biggestnumber = {{group.my_group_int_variable}};
+                document.getElementById("answerbig").innerHTML = biggestnumber;
+                // Option 2: From the message content
+                document.getElementById("answer1").innerHTML = obj.number_of_player_one;
+                document.getElementById("answer2").innerHTML = obj.number_of_player_two;
+
+                // Refresh timer?
+                $('#time_left').html(obj.time_left);
+                milliseconds = obj.time_left * 1000;
+                selectedDate = new Date().valueOf() + milliseconds;
+                update_create_countdown(milliseconds);
+                
+                // Refresh the table with new input from other players
+                refresh_fields();
+            };
+
+        };
+
+    </script>
+{% endblock %}
+
+{% block styles %}
+    <style>
+        .large {
+            font-size: 120%;
+        }
+    </style>
+{% endblock %}

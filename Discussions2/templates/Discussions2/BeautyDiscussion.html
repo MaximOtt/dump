@@ -1,0 +1,127 @@
+{% extends "global/Page.html" %}
+{% load otree static %}
+
+{% block title %}
+    Aufgabe 1
+{% endblock %}
+
+{% block content %}
+    <p>
+        Wenn Sie sich mit allen anderen Teilnehmern auf eine Antwort geeinigt haben,
+        können Sie diese abschicken, und zur nächsten Aufgabe fortfahren.
+    </p>
+    <table style="width:100%">
+        <tr>
+            <td>
+                {% chat %}
+            </td>
+            <td>
+                <p>
+                <input type="number" min="0" max="100" id="new_answer">
+                <button class="answer btn btn-success" type="button" onclick="suggest()" id="change_button">Vorschlag ändern</button>
+                </p>
+                <table>
+                    <tr><td align="right"><span id="player1">Antwort Spieler 1:</span></td><td><span id="answer1"></span></td></tr>
+                    <tr><td align="right"><span id="player2">Antwort Spieler 2:</span></td><td><span id="answer2"></span></td></tr>
+                    <tr><td align="right"><span id="player3">Antwort Spieler 3:</span></td><td><span id="answer3"></span></td></tr>
+                    <tr><td align="right"><span id="player4">Antwort Spieler 4:</span></td><td><span id="answer4"></span></td></tr>
+                </table>
+                
+                Button erscheint wenn alle gleich {% next_button %}
+            </td>
+        </tr>
+    </table>
+
+    <script>
+        document.getElementsByClassName("otree-chat__btn-send")[0].innerHTML = "Nachricht abschicken";
+    </script>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        change_history ="";
+
+        function suggest() {
+            change_history = change_history.concat(document.getElementById("new_answer").value.toString(),"_");
+            // Write to hidden BeautyChangeHistory field
+            
+            // Send new answer to be save in player variables
+            // function not needed, because something reacts to the click.
+            // refresh_table(); - done after receiving
+
+            // document.getElementById("new_answer").value = "";
+        }
+
+        function refresh_table() {
+            player_text = "player";
+            player_number = {{player.id_in_group}};
+            my_player_id = player_text.concat(player_number.toString());
+            document.getElementById(my_player_id).innerHTML= "Ihre Antwort:";
+
+            var i;
+            for (i = 1; i <= {{Constants.players_per_group}}; i++) { 
+                answer_text = "answer";
+                answer_number = i;
+                my_answer_id = answer_text.concat(answer_number.toString());
+                document.getElementById(my_answer_id).innerHTML= {{CurrentAnswersById}}[i-1];
+            }
+        }
+
+        window.onload = function () {
+            refresh_table();
+        };
+
+        $(function () {
+            var ws_scheme = window.location.protocol == "https:" ? "wss" : "ws";
+            var ws_path = ws_scheme + '://' + window.location.host + "/Discussions2/";
+            var socket = new ReconnectingWebSocket(ws_path);
+            
+            // Show a connected message when the WebSocket is opened.
+            socket.onopen = function(event) {
+                console.log('connected to oTree');
+            };
+
+            // Handle messages sent by the server.
+            socket.onmessage = function (event) {
+                //var obj = jQuery.parseJSON(event.data);
+                console.log('received message');
+                refresh_table();
+            };
+
+            $("button.answer").on("click", function () {
+                var msg = {
+                    id: {{player.id}},
+                    id_in_group: {{player.id_in_group}},
+                    new_answer: document.getElementById("new_answer").value
+                };
+                console.log('sending');
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify(msg));
+                    console.log('sent!');
+                };
+                document.getElementById("new_answer").value = "";
+                
+            });
+
+            $('button.otree-btn-next').unbind('keypress.key13');
+            $('button.answer').keypress(function(e) {
+                if (e.which == 13) {
+                    $(this).click();
+                }
+            });
+
+
+            // Show a disconnected message when the WebSocket is closed.
+            socket.onclose = function(event) {
+                console.log('disconnected from oTree');
+            };
+
+            // Handle any errors that occur.
+            socket.onerror = function(error) {
+                console.log('WebSocket Error: ' + error);
+            };
+        });
+    </script>
+
+
+{% endblock %}

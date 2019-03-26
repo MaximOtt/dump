@@ -1,0 +1,14 @@
+{% extends "global/Page.html" %}
+{% load otree static %}
+
+{% block title %}
+    Aufgabe 1 - Individueller Lösungsvorschlag
+{% endblock %}
+
+{% block content %}
+    Bitte geben Sie ihren Vorschlag ein:
+
+    {% formfield player.BeautyFirstAnswer %}
+
+    {% next_button %}
+{% endblock %}
